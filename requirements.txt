@@ -4,6 +4,5 @@ pydantic
 joblib
 pandas
 scikit-learn
-json
 typing
 logging

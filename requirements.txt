@@ -5,4 +5,3 @@ joblib
 pandas
 scikit-learn
 typing
-logging

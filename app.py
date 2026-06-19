@@ -2,16 +2,17 @@ import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 import joblib
+import json
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import os
 from typing import Literal
-import logging 
+import logging
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    filename='predictions.log', 
+    filename='predictions.log',
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
@@ -28,11 +29,11 @@ os.makedirs(MODEL_ARTIFACTS_DIR, exist_ok=True)
 
 # Model A artifacts
 MODEL_A_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'random_forest_model_a.joblib')
-FEATURE_SCHEMA_A_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'feature_schema_model_a.joblib')
+FEATURE_SCHEMA_A_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'feature_schema_model_a.json')
 
 # Model B artifacts
 MODEL_B_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'random_forest_model_b.joblib')
-FEATURE_SCHEMA_B_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'feature_schema_model_b.joblib')
+FEATURE_SCHEMA_B_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'feature_schema_model_b.json')
 
 # Load Model A
 model_a = joblib.load(MODEL_A_PATH)
@@ -153,8 +154,8 @@ async def predict_model_a(data: ModelAInput):
         processed_data_scaled = scaler_a.transform(processed_data)
         prediction = model_a.predict(processed_data_scaled)
         predicted_class = label_encoder_a.inverse_transform(prediction)[0]
-        
-        logger.info(f"Model A Prediction Response: {{"prediction": "{predicted_class}"}}") # Log prediction result
+
+        logger.info(f"Model A Prediction Response: {{'prediction': predicted_class}}") # Log prediction result
         return {"prediction": predicted_class}
 
     except Exception as e:
@@ -174,8 +175,8 @@ async def predict_model_b(data: ModelBInput):
         processed_data_scaled = scaler_b.transform(processed_data)
         prediction = model_b.predict(processed_data_scaled)
         predicted_class = label_encoder_b.inverse_transform(prediction)[0]
-        
-        logger.info(f"Model B Prediction Response: {{"prediction": "{predicted_class}"}}") # Log prediction result
+
+        logger.info(f"Model B Prediction Response: {{'prediction': predicted_class}}") # Log prediction result
         return {"prediction": predicted_class}
 
     except Exception as e:
@@ -183,4 +184,4 @@ async def predict_model_b(data: ModelBInput):
         return {"error": str(e)}, 500
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=10000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

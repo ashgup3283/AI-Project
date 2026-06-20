@@ -134,10 +134,10 @@ def align_dataframe_with_schema(df: pd.DataFrame, categorical_cols_to_encode: li
     # Perform one-hot encoding
     df_encoded = pd.get_dummies(df_processed, columns=categorical_cols_to_encode, drop_first=False)
 
-    # Explicitly convert all one-hot encoded columns (typically uint8) to int for Evidently compatibility
+    # Explicitly convert all one-hot encoded columns (uint8 or bool) to int64 for Evidently compatibility
     for col in df_encoded.columns:
-        if df_encoded[col].dtype == 'uint8':
-            df_encoded[col] = df_encoded[col].astype(int)
+        if df_encoded[col].dtype == 'uint8' or df_encoded[col].dtype == 'bool':
+            df_encoded[col] = df_encoded[col].astype('int64')
 
     # Create a new DataFrame with all columns from target_schema, filled with zeros
     final_df = pd.DataFrame(0, index=df_encoded.index, columns=target_schema)
@@ -171,10 +171,10 @@ def preprocess_input(data: BaseModel, feature_schema: list, model_type: str):
 
     df_processed = pd.get_dummies(df, columns=cols_to_apply, drop_first=False)
 
-    # Explicitly convert all one-hot encoded columns (typically uint8) to int for Evidently compatibility
+    # Explicitly convert all one-hot encoded columns (uint8 or bool) to int64 for Evidently compatibility
     for col in df_processed.columns:
-        if df_processed[col].dtype == 'uint8':
-            df_processed[col] = df_processed[col].astype(int)
+        if df_processed[col].dtype == 'uint8' or df_processed[col].dtype == 'bool':
+            df_processed[col] = df_processed[col].astype('int64')
 
     df_final = pd.DataFrame(0, index=[0], columns=feature_schema)
     for col in df_processed.columns:
@@ -249,7 +249,7 @@ async def predict_model_a(data: ModelAInput):
 
     except Exception as e:
         logger.exception(f"Error during Model A prediction: {e}")
-        return {"error": str(e)}, 500
+        return {"error": str(e)}
 
 @app.post("/predict_b")
 async def predict_model_b(data: ModelBInput):
@@ -273,7 +273,7 @@ async def predict_model_b(data: ModelBInput):
 
     except Exception as e:
         logger.exception(f"Error during Model B prediction: {e}")
-        return {"error": str(e)}, 500
+        return {"error": str(e)}
 
 @app.get("/drift_report/{model_type}")
 async def get_drift_report(model_type: Literal['a', 'b']):

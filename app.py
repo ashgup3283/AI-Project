@@ -220,7 +220,7 @@ async def predict_model_b(data: ModelBInput):
         processed_data = preprocess_input(data, feature_schema_b, 'model_b')
         full_reference_data = pd.read_parquet(DATASET_PATH)
         base_reference_b = full_reference_data.drop(columns=['claim_status'], errors='ignore')
-        reference_data_b = _align_dataframe_with_schema(
+        reference_data_b = align_dataframe_with_schema(
                            base_reference_b,
                            CATEGORICAL_COLS_MODEL_B,
                            feature_schema_b

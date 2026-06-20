@@ -107,7 +107,7 @@ class ModelBInput(BaseModel):
     risk_score: Literal['High', 'Low', 'Medium']
     weekend_visit: bool
 
-# Categorical columns for one-hot encoding 
+# Categorical columns for one-hot encoding (extracted from training phase logic)
 CATEGORICAL_COLS_MODEL_A = [
     'gender', 'city', 'insurance_provider', 'department', 'visit_type',
     'chronic_flag', 'weekend_visit'
@@ -118,17 +118,24 @@ CATEGORICAL_COLS_MODEL_B = [
 ]
 
 def align_dataframe_with_schema(df: pd.DataFrame, categorical_cols_to_encode: list, target_schema: list):
-
+    """
+    Applies one-hot encoding to specified categorical columns and aligns the DataFrame
+    with a target schema (adds missing columns as zeros, drops extra columns).
+    """
     df_processed = df.copy()
 
+    # Convert specified categorical columns to string if they exist
     for col in categorical_cols_to_encode:
-        if col in df_processed.columns and df_processed[col].dtype == 'object':
+        if col in df_processed.columns:
             df_processed[col] = df_processed[col].astype(str)
 
+    # Perform one-hot encoding
     df_encoded = pd.get_dummies(df_processed, columns=categorical_cols_to_encode, drop_first=False)
 
+    # Create a new DataFrame with all columns from target_schema, filled with zeros
     final_df = pd.DataFrame(0, index=df_encoded.index, columns=target_schema)
 
+    # Fill in the columns that exist in both df_encoded and target_schema
     for col in df_encoded.columns:
         if col in final_df.columns:
             final_df[col] = df_encoded[col]
@@ -146,7 +153,7 @@ def preprocess_input(data: BaseModel, feature_schema: list, model_type: str):
         cols_to_apply = CATEGORICAL_COLS_MODEL_B
 
     for col in cols_to_apply:
-        if col in df.columns and df[col].dtype == 'object': # Only convert 'object' types to str
+        if col in df.columns: # Removed dtype check
             df[col] = df[col].astype(str)
 
     df_processed = pd.get_dummies(df, columns=cols_to_apply, drop_first=False)
@@ -173,7 +180,35 @@ def generate_data_drift_report(current_data: pd.DataFrame, reference_data: pd.Da
     except Exception as e:
         logger.exception(f"Error generating data drift report {report_name}: {e}")
         return None
-        
+
+try:
+    full_reference_data = pd.read_parquet(DATASET_PATH)
+
+    # Preprocess reference data for Model A to match its schema
+    # Drop target column for Model A and then align with its specific feature schema
+    base_reference_a = full_reference_data.drop(columns=['risk_score', 'claim_status'], errors='ignore')
+    reference_data_a = align_dataframe_with_schema(
+        base_reference_a,
+        CATEGORICAL_COLS_MODEL_A,
+        feature_schema_a
+    )
+
+    # Preprocess reference data for Model B to match its schema
+    # Drop target column for Model B and then align with its specific feature schema
+    base_reference_b = full_reference_data.drop(columns=['claim_status'], errors='ignore')
+    reference_data_b = align_dataframe_with_schema(
+        base_reference_b,
+        CATEGORICAL_COLS_MODEL_B,
+        feature_schema_b
+    )
+
+    logger.info("Reference data for drift detection loaded and preprocessed successfully.")
+except Exception as e:
+    logger.error(f"Error loading and preprocessing reference data for drift detection: {e}")
+    full_reference_data = None
+    reference_data_a = None
+    reference_data_b = None
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
@@ -187,13 +222,6 @@ async def predict_model_a(data: ModelAInput):
 
     try:
         processed_data = preprocess_input(data, feature_schema_a, 'model_a')
-        full_reference_data = pd.read_parquet(DATASET_PATH)
-        base_reference_a = full_reference_data.drop(columns=['risk_score', 'claim_status'], errors='ignore')
-        reference_data_a = align_dataframe_with_schema(
-                                  base_reference_a,
-                                  CATEGORICAL_COLS_MODEL_A,
-                                  feature_schema_a
-                            )
 
         # Generate data drift report for Model A
         drift_report_path = generate_data_drift_report(processed_data, reference_data_a, 'data_drift_report_a.html')
@@ -218,13 +246,7 @@ async def predict_model_b(data: ModelBInput):
 
     try:
         processed_data = preprocess_input(data, feature_schema_b, 'model_b')
-        full_reference_data = pd.read_parquet(DATASET_PATH)
-        base_reference_b = full_reference_data.drop(columns=['claim_status'], errors='ignore')
-        reference_data_b = align_dataframe_with_schema(
-                           base_reference_b,
-                           CATEGORICAL_COLS_MODEL_B,
-                           feature_schema_b
-                          )
+
         # Generate data drift report for Model B
         drift_report_path = generate_data_drift_report(processed_data, reference_data_b, 'data_drift_report_b.html')
 

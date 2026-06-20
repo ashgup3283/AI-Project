@@ -118,16 +118,18 @@ CATEGORICAL_COLS_MODEL_B = [
 ]
 
 def align_dataframe_with_schema(df: pd.DataFrame, categorical_cols_to_encode: list, target_schema: list):
-    """
-    Applies one-hot encoding to specified categorical columns and aligns the DataFrame
-    with a target schema (adds missing columns as zeros, drops extra columns).
-    """
+
     df_processed = df.copy()
 
-    # Convert specified categorical columns to string if they exist
+    # Ensure all listed categorical columns are handled correctly for one-hot encoding
     for col in categorical_cols_to_encode:
         if col in df_processed.columns:
-            df_processed[col] = df_processed[col].astype(str)
+            if df_processed[col].dtype == 'bool':
+                # Convert boolean to integer (0 or 1) for consistent one-hot encoding behavior
+                df_processed[col] = df_processed[col].astype(int)
+            else:
+                # Convert all other categorical-designated columns to string
+                df_processed[col] = df_processed[col].astype(str)
 
     # Perform one-hot encoding
     df_encoded = pd.get_dummies(df_processed, columns=categorical_cols_to_encode, drop_first=False)
@@ -152,9 +154,15 @@ def preprocess_input(data: BaseModel, feature_schema: list, model_type: str):
     elif model_type == 'model_b':
         cols_to_apply = CATEGORICAL_COLS_MODEL_B
 
+    # Ensure all listed categorical columns are handled correctly for one-hot encoding
     for col in cols_to_apply:
-        if col in df.columns: # Removed dtype check
-            df[col] = df[col].astype(str)
+        if col in df.columns:
+            if df[col].dtype == 'bool':
+                # Convert boolean to integer (0 or 1) for consistent one-hot encoding behavior
+                df[col] = df[col].astype(int)
+            else:
+                # Convert all other categorical-designated columns to string
+                df[col] = df[col].astype(str)
 
     df_processed = pd.get_dummies(df, columns=cols_to_apply, drop_first=False)
 
@@ -184,8 +192,6 @@ def generate_data_drift_report(current_data: pd.DataFrame, reference_data: pd.Da
 try:
     full_reference_data = pd.read_parquet(DATASET_PATH)
 
-    # Preprocess reference data for Model A to match its schema
-    # Drop target column for Model A and then align with its specific feature schema
     base_reference_a = full_reference_data.drop(columns=['risk_score', 'claim_status'], errors='ignore')
     reference_data_a = align_dataframe_with_schema(
         base_reference_a,
@@ -193,8 +199,6 @@ try:
         feature_schema_a
     )
 
-    # Preprocess reference data for Model B to match its schema
-    # Drop target column for Model B and then align with its specific feature schema
     base_reference_b = full_reference_data.drop(columns=['claim_status'], errors='ignore')
     reference_data_b = align_dataframe_with_schema(
         base_reference_b,
@@ -218,7 +222,8 @@ async def predict_model_a(data: ModelAInput):
 
     if model_a is None or not feature_schema_a:
         logger.error("Model A model is missing or Feature Schema is missing.")
-        return {"error": "Model A model is missing or Feature Schema is missing."}, 500
+        return {"error": "Model A model is missing or Feature Schema is missing."},
+ 500
 
     try:
         processed_data = preprocess_input(data, feature_schema_a, 'model_a')
@@ -242,7 +247,8 @@ async def predict_model_b(data: ModelBInput):
 
     if model_b is None or not feature_schema_b:
         logger.error("Model B is not ready for predictions.")
-        return {"error": "Model B is not ready for predictions."}, 500
+        return {"error": "Model B is not ready for predictions."},
+ 500
 
     try:
         processed_data = preprocess_input(data, feature_schema_b, 'model_b')
@@ -270,7 +276,8 @@ async def get_drift_report(model_type: Literal['a', 'b']):
             html_content = f.read()
         return {"report_html": html_content}
     else:
-        return {"error": f"Drift report for Model {model_type.upper()} not found."}, 404
+        return {"error": f"Drift report for Model {model_type.upper()} not found."},
+ 404
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=10000)

@@ -6,3 +6,4 @@ pandas
 scikit-learn
 typing
 evidently==0.4.5
+numpy<2.0 # or numpy==1.26.4 for a specific version

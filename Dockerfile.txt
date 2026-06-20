@@ -9,5 +9,5 @@ COPY app.py .
 COPY model_artifacts ./model_artifacts
 
 EXPOSE 10000
-
+RUN python -c "import evidently; print('Evidently successfully imported inside Docker build!');"
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "10000"]

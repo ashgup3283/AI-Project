@@ -187,7 +187,6 @@ async def health_check():
 
 @app.post("/predict_a")
 async def predict_model_a(data: ModelAInput):
-    logger.info(f"Model A Prediction Request: {data.model_dump()}") 
 
     if model_a is None or not feature_schema_a:
         logger.error("Model A model is missing or Feature Schema is missing.")
@@ -212,7 +211,6 @@ async def predict_model_a(data: ModelAInput):
 
 @app.post("/predict_b")
 async def predict_model_b(data: ModelBInput):
-    logger.info(f"Model B Prediction Request: {data.model_dump()}") 
 
     if model_b is None or not feature_schema_b:
         logger.error("Model B is not ready for predictions.")

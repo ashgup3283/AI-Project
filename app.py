@@ -8,9 +8,6 @@ import os
 from typing import Literal
 import logging
 
-    
-
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

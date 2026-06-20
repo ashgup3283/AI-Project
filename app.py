@@ -118,7 +118,6 @@ CATEGORICAL_COLS_MODEL_B = [
 ]
 
 def align_dataframe_with_schema(df: pd.DataFrame, categorical_cols_to_encode: list, target_schema: list):
-
     df_processed = df.copy()
 
     # Ensure all listed categorical columns are handled correctly for one-hot encoding
@@ -222,8 +221,7 @@ async def predict_model_a(data: ModelAInput):
 
     if model_a is None or not feature_schema_a:
         logger.error("Model A model is missing or Feature Schema is missing.")
-        return {"error": "Model A model is missing or Feature Schema is missing."},
- 500
+        return {"error": "Model A model is missing or Feature Schema is missing."}
 
     try:
         processed_data = preprocess_input(data, feature_schema_a, 'model_a')
@@ -247,8 +245,7 @@ async def predict_model_b(data: ModelBInput):
 
     if model_b is None or not feature_schema_b:
         logger.error("Model B is not ready for predictions.")
-        return {"error": "Model B is not ready for predictions."},
- 500
+        return {"error": "Model B is not ready for predictions."}
 
     try:
         processed_data = preprocess_input(data, feature_schema_b, 'model_b')
@@ -265,7 +262,7 @@ async def predict_model_b(data: ModelBInput):
 
     except Exception as e:
         logger.exception(f"Error during Model B prediction: {e}")
-        return {"error": str(e)}, 500
+        return {"error": str(e)}
 
 @app.get("/drift_report/{model_type}")
 async def get_drift_report(model_type: Literal['a', 'b']):
@@ -276,8 +273,7 @@ async def get_drift_report(model_type: Literal['a', 'b']):
             html_content = f.read()
         return {"report_html": html_content}
     else:
-        return {"error": f"Drift report for Model {model_type.upper()} not found."},
- 404
+        return {"error": f"Drift report for Model {model_type.upper()} not found."}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=10000)

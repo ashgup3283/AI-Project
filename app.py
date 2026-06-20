@@ -7,15 +7,9 @@ from sklearn.preprocessing import StandardScaler
 import os
 from typing import Literal
 import logging
-try:
-    import evidently
-    logger.info('Evidently module is available at app runtime.')
-except ImportError as e:
-    logger.error(f'Evidently module is NOT available at app runtime: {e}')
-    raise # Re-raise to ensure the error is visible
+
     
-from evidently.report import Report
-from evidently.metric_preset import DataDriftPreset
+
 
 # Configure logging
 logging.basicConfig(
@@ -26,6 +20,15 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+try:
+    import evidently
+    logger.info('Evidently module is available at app runtime.')
+except ImportError as e:
+    logger.error(f'Evidently module is NOT available at app runtime: {e}')
+    raise # Re-raise to ensure the error is visible
+
+from evidently.report import Report
+from evidently.metric_preset import DataDriftPreset
 
 # Initialize FastAPI app
 app = FastAPI()

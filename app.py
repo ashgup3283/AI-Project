@@ -134,7 +134,8 @@ class ModelBInput(BaseModel):
     weekend_visit: bool
 
 def preprocess_input(data: BaseModel, feature_schema: list, model_type: str):
-    df = pd.DataFrame([data.model_dump()])
+    df = pd.DataFrame([data.dict()])
+    #df = pd.DataFrame([data.model_dump()])
 
     # Categorical columns that were one-hot encoded during training
     categorical_cols_model_a = [

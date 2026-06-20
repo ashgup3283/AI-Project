@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 try:
     import evidently
-    logger.info('Evidently module is available at app runtime.')
+    print('Evidently module is available at app runtime.')
 except ImportError as e:
-    logger.error(f'Evidently module is NOT available at app runtime: {e}')
+    print(f'Evidently module is NOT available at app runtime: {e}')
     raise # Re-raise to ensure the error is visible
 
 from evidently.report import Report

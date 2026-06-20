@@ -5,4 +5,4 @@ joblib
 pandas
 scikit-learn
 typing
-evidently
+evidently==0.4.5

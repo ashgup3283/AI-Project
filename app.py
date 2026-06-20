@@ -21,7 +21,7 @@ try:
     import evidently
     print('Evidently module is available at app runtime.')
     print(f'sys.path: {sys.path}')
-    print(f'Successfully imported \'evidently\' (version: {evidently.__version__})
+    print(f'Successfully imported \'evidently\' (version: {evidently.__version__})')
 except ImportError as e:
     print(f'Evidently module is NOT available at app runtime: {e}')
     raise # Re-raise to ensure the error is visible

@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import os
 from typing import Literal
+import sys
 import logging
 
 # Configure logging

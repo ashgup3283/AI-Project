@@ -13,7 +13,6 @@ import logging
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    filename='predictions.log',
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 

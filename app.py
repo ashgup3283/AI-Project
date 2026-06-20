@@ -4,11 +4,12 @@ from pydantic import BaseModel, Field
 import joblib
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-import os
 import json
+import os
 from typing import Literal
-import sys
 import logging
+from evidently.report import Report
+from evidently.metric_preset import DataDriftPreset
 
 # Configure logging
 logging.basicConfig(
@@ -17,18 +18,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-
-try:
-    import evidently
-    print('Evidently module is available at app runtime.')
-    print(f'sys.path: {sys.path}')
-    print(f'Successfully imported \'evidently\' (version: {evidently.__version__})')
-except ImportError as e:
-    print(f'Evidently module is NOT available at app runtime: {e}')
-    raise # Re-raise to ensure the error is visible
-
-from evidently.report import Report
-from evidently.metric_preset import DataDriftPreset
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -41,11 +30,11 @@ os.makedirs(MODEL_ARTIFACTS_DIR, exist_ok=True)
 
 # Model A artifacts
 MODEL_A_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'random_forest_model_a.joblib')
-FEATURE_SCHEMA_A_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'feature_schema_model_a.json') 
+FEATURE_SCHEMA_A_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'feature_schema_model_a.json')
 
 # Model B artifacts
 MODEL_B_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'random_forest_model_b.joblib')
-FEATURE_SCHEMA_B_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'feature_schema_model_b.json') 
+FEATURE_SCHEMA_B_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'feature_schema_model_b.json')
 
 # Load Model A
 model_a = joblib.load(MODEL_A_PATH)
@@ -73,21 +62,6 @@ label_encoder_b = joblib.load(LABEL_ENCODER_B_PATH)
 
 # Load reference data for drift detection
 DATASET_PATH = os.path.join(MODEL_ARTIFACTS_DIR, 'modeling_dataset.parquet')
-
-try:
-    full_reference_data = pd.read_parquet(DATASET_PATH)
-
-    reference_data_a = full_reference_data.drop(columns=['risk_score', 'claim_status'], errors='ignore')
-
-    reference_data_b = full_reference_data.drop(columns=['claim_status'], errors='ignore')
-
-    logger.info("Reference data for drift detection loaded successfully.")
-except Exception as e:
-    logger.error(f"Error loading reference data for drift detection: {e}")
-    full_reference_data = None
-    reference_data_a = None
-    reference_data_b = None
-
 
 # Pydantic models
 class ModelAInput(BaseModel):
@@ -133,25 +107,43 @@ class ModelBInput(BaseModel):
     risk_score: Literal['High', 'Low', 'Medium']
     weekend_visit: bool
 
+# Categorical columns for one-hot encoding 
+CATEGORICAL_COLS_MODEL_A = [
+    'gender', 'city', 'insurance_provider', 'department', 'visit_type',
+    'chronic_flag', 'weekend_visit'
+]
+CATEGORICAL_COLS_MODEL_B = [
+    'gender', 'city', 'insurance_provider', 'department', 'visit_type',
+    'chronic_flag', 'risk_score', 'weekend_visit'
+]
+
+def align_dataframe_with_schema(df: pd.DataFrame, categorical_cols_to_encode: list, target_schema: list):
+
+    df_processed = df.copy()
+
+    for col in categorical_cols_to_encode:
+        if col in df_processed.columns and df_processed[col].dtype == 'object':
+            df_processed[col] = df_processed[col].astype(str)
+
+    df_encoded = pd.get_dummies(df_processed, columns=categorical_cols_to_encode, drop_first=False)
+
+    final_df = pd.DataFrame(0, index=df_encoded.index, columns=target_schema)
+
+    for col in df_encoded.columns:
+        if col in final_df.columns:
+            final_df[col] = df_encoded[col]
+
+    return final_df
+
 def preprocess_input(data: BaseModel, feature_schema: list, model_type: str):
     df = pd.DataFrame([data.dict()])
-    #df = pd.DataFrame([data.model_dump()])
 
     # Categorical columns that were one-hot encoded during training
-    categorical_cols_model_a = [
-        'gender', 'city', 'insurance_provider', 'department', 'visit_type',
-        'chronic_flag', 'weekend_visit'
-    ]
-    categorical_cols_model_b = [
-        'gender', 'city', 'insurance_provider', 'department', 'visit_type',
-        'chronic_flag', 'risk_score', 'weekend_visit'
-    ]
-
     cols_to_apply = []
     if model_type == 'model_a':
-        cols_to_apply = categorical_cols_model_a
+        cols_to_apply = CATEGORICAL_COLS_MODEL_A
     elif model_type == 'model_b':
-        cols_to_apply = categorical_cols_model_b
+        cols_to_apply = CATEGORICAL_COLS_MODEL_B
 
     for col in cols_to_apply:
         if col in df.columns and df[col].dtype == 'object': # Only convert 'object' types to str
@@ -167,7 +159,7 @@ def preprocess_input(data: BaseModel, feature_schema: list, model_type: str):
     return df_final
 
 def generate_data_drift_report(current_data: pd.DataFrame, reference_data: pd.DataFrame, report_name: str):
-    if reference_data is None:
+    if reference_data is None: # Check if reference_data is None here
         logger.warning(f"Reference data not available for {report_name}. Skipping drift report generation.")
         return None
 
@@ -181,7 +173,7 @@ def generate_data_drift_report(current_data: pd.DataFrame, reference_data: pd.Da
     except Exception as e:
         logger.exception(f"Error generating data drift report {report_name}: {e}")
         return None
-
+        
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
@@ -195,6 +187,13 @@ async def predict_model_a(data: ModelAInput):
 
     try:
         processed_data = preprocess_input(data, feature_schema_a, 'model_a')
+        full_reference_data = pd.read_parquet(DATASET_PATH)
+        base_reference_a = full_reference_data.drop(columns=['risk_score', 'claim_status'], errors='ignore')
+        reference_data_a = align_dataframe_with_schema(
+                                  base_reference_a,
+                                  CATEGORICAL_COLS_MODEL_A,
+                                  feature_schema_a
+                            )
 
         # Generate data drift report for Model A
         drift_report_path = generate_data_drift_report(processed_data, reference_data_a, 'data_drift_report_a.html')
@@ -203,11 +202,11 @@ async def predict_model_a(data: ModelAInput):
         prediction = model_a.predict(processed_data_scaled)
         predicted_class = label_encoder_a.inverse_transform(prediction)[0]
 
-        logger.info(f"Model A Prediction Response: {{'prediction': predicted_class}}") 
+        logger.info(f"Model A Prediction Response: {{'prediction': predicted_class}}")
         return {"prediction": predicted_class, "data_drift_report": drift_report_path}
 
     except Exception as e:
-        logger.exception(f"Error during Model A prediction: {e}") 
+        logger.exception(f"Error during Model A prediction: {e}")
         return {"error": str(e)}, 500
 
 @app.post("/predict_b")
@@ -219,7 +218,13 @@ async def predict_model_b(data: ModelBInput):
 
     try:
         processed_data = preprocess_input(data, feature_schema_b, 'model_b')
-
+        full_reference_data = pd.read_parquet(DATASET_PATH)
+        base_reference_b = full_reference_data.drop(columns=['claim_status'], errors='ignore')
+        reference_data_b = _align_dataframe_with_schema(
+                           base_reference_b,
+                           CATEGORICAL_COLS_MODEL_B,
+                           feature_schema_b
+                          )
         # Generate data drift report for Model B
         drift_report_path = generate_data_drift_report(processed_data, reference_data_b, 'data_drift_report_b.html')
 
@@ -231,7 +236,7 @@ async def predict_model_b(data: ModelBInput):
         return {"prediction": predicted_class, "data_drift_report": drift_report_path}
 
     except Exception as e:
-        logger.exception(f"Error during Model B prediction: {e}") 
+        logger.exception(f"Error during Model B prediction: {e}")
         return {"error": str(e)}, 500
 
 @app.get("/drift_report/{model_type}")
@@ -243,7 +248,7 @@ async def get_drift_report(model_type: Literal['a', 'b']):
             html_content = f.read()
         return {"report_html": html_content}
     else:
-        return {"error": f"Drift report for Model {model_type.upper()} not found. Make a prediction first to generate it."}, 404
+        return {"error": f"Drift report for Model {model_type.upper()} not found."}, 404
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=10000)
